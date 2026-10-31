@@ -1,10 +1,24 @@
+# docker compose up --build -d, затем http://localhost:8080. Порт занят — OFERA_PORT=8090 docker compose up -d
+# Наружу смотрит только nginx и только на 127.0.0.1: api доступен лишь из сети compose
 name: ofera
+
+x-ship: &ship
+  ofera.ship: "1"
 
 services:
   api:
-    build: ./api
+    build:
+      context: ./api
+      labels: *ship
+    labels: *ship
     environment:
+      # Браузер шлёт Origin и на своём адресе: без этого cookie-ручки ответят 403
       QUEST_ORIGINS: http://localhost:${OFERA_PORT:-8080}
+      # Один прокси перед api: иначе все посетители для лимитов — один IP
+      QUEST_TRUST_PROXY: 1
+    # Внутри контейнера это файл /run/secrets/jwt: не попадает в docker inspect и в env процесса
+    secrets:
+      - jwt
     volumes:
       - data:/data
     healthcheck:
@@ -16,7 +30,10 @@ services:
       start_interval: 1s
 
   web:
-    build: ./web
+    build:
+      context: ./web
+      labels: *ship
+    labels: *ship
     depends_on:
       api:
         condition: service_healthy
@@ -32,3 +49,9 @@ services:
 
 volumes:
   data:
+    labels: *ship
+
+# Ключи создаёт npm run secrets:init, у каждого стенда свой файл, каталог в .gitignore
+secrets:
+  jwt:
+    file: ./secrets/${OFERA_STAND:-dev}.jwt
