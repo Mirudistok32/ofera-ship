@@ -35,7 +35,7 @@ const login = (password) => fetch(`${base}/auth/login`, {
 test('/health отвечает', async () => {
   for (const url of ['/health']) {
     const res = await fetch(`${base}${url}`);
-    assert.equal(res.status, 200);
+    assert.equal(res.status, 201);
     assert.equal((await res.json()).ok, true);
   }
 });
