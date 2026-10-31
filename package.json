@@ -1,0 +1,15 @@
+{
+  "name": "ofera",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Офферомания: web на React и api на Express. Практика «Офферомания едет в прод»",
+  "engines": { "node": ">=22.9" },
+  "scripts": {
+    "postinstall": "npm ci --prefix api && npm ci --prefix web",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build --prefix web",
+    "typecheck": "npm run typecheck --prefix web",
+    "reset": "npm run reset --prefix api"
+  }
+}
