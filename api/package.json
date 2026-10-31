@@ -3,11 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.9" },
+  "engines": {
+    "node": ">=22.9"
+  },
   "scripts": {
     "dev": "node --env-file-if-exists=../.env --watch index.js",
     "start": "node index.js",
-    "reset": "node seed.js --reset"
+    "reset": "node seed.js --reset",
+    "test": "node --test"
   },
   "dependencies": {
     "express": "5.3.0"
