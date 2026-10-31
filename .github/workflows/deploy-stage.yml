@@ -1,0 +1,22 @@
+# Сам stage CI не трогает: записывает тег, а агент на машине со стендом подтягивает образ
+name: Deploy stage
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: stage
+    concurrency:
+      group: deploy-stage
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: bash .github/scripts/set-release.sh stage "$GITHUB_SHA"

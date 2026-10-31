@@ -1,0 +1,55 @@
+# Каждый PR: типы, сборка, тесты. Push в main: то же, затем один образ на коммит и выкатка на stage.
+# Образ и выкатка — переиспользуемые workflow: на странице прогона весь путь коммита виден одним графом
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Минимум по умолчанию, остальное выдаётся отдельной job
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Новый коммит в PR отменяет старую проверку. На main отмена оборвала бы выкатку на полпути
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          # Lock-файлов три: с одним корневым кэш не заметил бы новые зависимости api и web
+          cache-dependency-path: |
+            package-lock.json
+            api/package-lock.json
+            web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
+  # У PR, в том числе из форка, этих job нет: токен там только на чтение, а выкатывать непроверенное незачем
+  image:
+    needs: check
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/image.yml
+
+  stage:
+    needs: image
+    permissions:
+      contents: write
+    uses: ./.github/workflows/deploy-stage.yml

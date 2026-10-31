@@ -1,0 +1,3 @@
+#!/bin/sh
+# Включается один раз: npm run secrets:hook. Обойти можно через --no-verify, поэтому то же проверяет CI
+exec node scripts/secrets.mjs scan --staged

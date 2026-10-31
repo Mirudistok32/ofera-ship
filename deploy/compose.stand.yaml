@@ -1,0 +1,28 @@
+# Стенд поверх compose.yaml: те же сервисы и проверки здоровья, но образ из реестра вместо сборки и вход через edge.
+# Запускает агент: compose -p ofera-<стенд> -f compose.yaml -f deploy/compose.stand.yaml.
+# Том и сеть у каждого проекта свои, поэтому база и api стендов не пересекаются
+services:
+  api:
+    image: ${OFERA_IMAGES:?нужен адрес реестра}/ofera-api:${IMAGE_TAG:?нужен тег образа}
+    environment:
+      OFERA_STAND: ${OFERA_STAND:?нужно имя стенда}
+      QUEST_ORIGINS: http://${OFERA_STAND}.ofera.localhost:${OFERA_EDGE_PORT:-8088}
+      # Перед api два прокси: edge и nginx в web
+      QUEST_TRUST_PROXY: 2
+
+  web:
+    image: ${OFERA_IMAGES}/ofera-web:${IMAGE_TAG}
+    environment:
+      OFERA_STAND: ${OFERA_STAND}
+    # Снаружи стенд виден только через edge
+    ports: !reset []
+    networks:
+      default:
+      edge:
+        aliases:
+          - ofera-${OFERA_STAND}-web
+
+networks:
+  edge:
+    name: ofera-edge
+    external: true

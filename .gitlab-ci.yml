@@ -1,0 +1,48 @@
+# Та же сборка, что в .github/workflows, для сравнения. Учебный репозиторий живёт на GitHub, там этот файл не запускается
+stages: [check, build]
+
+# Конвейер на merge request и на main. Без правила ветка с открытым MR запускала бы два конвейера на один коммит
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+check:
+  stage: check
+  image: node:26.13.0-slim
+  timeout: 10 minutes
+  variables:
+    # Кэш сохраняется только из папки проекта, поэтому и npm складывает пакеты туда
+    npm_config_cache: $CI_PROJECT_DIR/.npm
+  cache:
+    key:
+      files:
+        - package-lock.json
+        - api/package-lock.json
+        - web/package-lock.json
+    paths:
+      - .npm/
+  script:
+    - npm ci
+    - npm run typecheck
+    - npm run build
+    - npm test
+
+build_image:
+  stage: build
+  image: docker:29.9.2-cli
+  services:
+    - docker:29.9.2-dind
+  timeout: 20 minutes
+  variables:
+    DOCKER_TLS_CERTDIR: /certs
+  # В MR образ не нужен: выкатывать непроверенное некуда
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  parallel:
+    matrix:
+      - SERVICE: [api, web]
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE/ofera-$SERVICE:$CI_COMMIT_SHA" "$SERVICE"
+    - docker push "$CI_REGISTRY_IMAGE/ofera-$SERVICE:$CI_COMMIT_SHA"
