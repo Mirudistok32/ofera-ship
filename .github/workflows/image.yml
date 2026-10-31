@@ -43,3 +43,28 @@ jobs:
           # Свой scope у каждого сервиса: иначе api и web вытесняли бы кэш друг друга
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # Скан до выкатки: stage ждёт всю задачу image. Падаем только на то, что уже можно исправить: чинится обновлением базового образа или зависимости.
+  # Сканер — тоже зависимость: образ закреплён дайджестом, а trivy-action не берём, в марте 2026 его теги перезаписали
+  scan:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, web]
+    steps:
+      - id: owner
+        run: echo "lower=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - env:
+          IMAGE: ghcr.io/${{ steps.owner.outputs.lower }}/ofera-${{ matrix.service }}:${{ github.sha }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+            aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c \
+            image --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress "$IMAGE"

@@ -5,6 +5,11 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 RUN ASSET_BASE="$ASSET_BASE" npm run build
+RUN mkdir /maps && find dist -name '*.map' -exec mv {} /maps/ \;
+
+# Карты для разбора ошибок забирают отдельно: docker build --target maps --output maps web. В итоговый образ они не идут
+FROM scratch AS maps
+COPY --from=build /maps /
 
 FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 COPY --from=build /app/dist /usr/share/nginx/html

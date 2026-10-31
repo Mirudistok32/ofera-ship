@@ -11,10 +11,10 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PORT, DB_FILE, ORIGINS, RELEASE, SLOT, STANDBY, HOLD_MS, DRAIN_MS } from './config.js';
+import { PORT, DB_FILE, ORIGINS, TRUST_PROXY, CHAOS_OPEN, RELEASE, SLOT, STANDBY, HOLD_MS, DRAIN_MS } from './config.js';
 import { Db, DbError, newCtx, dbHeaders } from './db.js';
 import { seed } from './seed.js';
-import { log, requestLog } from './log.js';
+import { event, log, requestLog } from './log.js';
 import { HttpError } from './errors.js';
 import { createAuth } from './auth.js';
 import { createCatalog } from './catalog.js';
@@ -91,6 +91,7 @@ export function createApp({ db, origins = ORIGINS }) {
   const app = express();
   app.disable('x-powered-by');
   app.disable('etag');   // ETag ставим сами там, где он нужен (справочники)
+  app.set('trust proxy', TRUST_PROXY);
   app.locals.db = db.ensure(['album', ...EMPTY_TABLES]);
 
   /* Вход, refresh, выход и /me; requireAuth и requireRole — для роутов следующих пунктов */
@@ -104,7 +105,7 @@ export function createApp({ db, origins = ORIGINS }) {
 
   app.use(requestContext());
   app.use(requestLog());
-  app.use(journal.middleware);
+  if (CHAOS_OPEN) app.use(journal.middleware);
   app.use(cors(origins));
   app.use(express.json({ limit: '100kb' }));
   app.use(chaos.middleware);
@@ -131,21 +132,24 @@ export function createApp({ db, origins = ORIGINS }) {
   app.use(stream.router);
 
   /* Пульт /__chaos, журнал /__log и проверка тикетов /__check */
-  app.use(chaos.router);
-  app.use(journal.router);
-  app.use(createChecks({ journal, chaos, auth, streams: stream.byOrigin }).router);
+  if (CHAOS_OPEN) app.use(chaos.router);
+  if (CHAOS_OPEN) app.use(journal.router);
+  if (CHAOS_OPEN) app.use(createChecks({ journal, chaos, auth, streams: stream.byOrigin }).router);
 
-  /* Жив ли сервер и сколько в базе — один запрос «по индексу» */
-  app.get('/health', async (req, res) => {
-    const counts = await db.run(req.db, 'index', () => db.stats().counts);
-    res.json({ ok: true, serverTime: Date.now(), boots: db.meta.boots, seed: db.meta.seed, counts });
+  /* Жив ли процесс. База здесь ни при чём: её сбой перезапуском не вылечить */
+  app.get('/health', (req, res) => res.json({ ok: true }));
+
+  /* Можно ли слать сюда запросы: база отвечает. Нет — 503, балансировщик уводит трафик, процесс не трогают */
+  app.get('/ready', async (req, res) => {
+    const ok = await db.run(req.db, 'index', () => true).catch(() => false);
+    res.status(ok ? 200 : 503).json({ ok });
   });
 
   /* Какая версия ответила: агент сверяет её до и после переключения */
   app.get('/version', (req, res) => res.json(versionInfo()));
 
   /* Состояние пула для пульта */
-  app.get('/__db', (req, res) => {
+  if (CHAOS_OPEN) app.get('/__db', (req, res) => {
     const { active, queued, poolSize, queueMax, noIndex, counts } = db.stats();
     res.json({ active, queued, poolSize, queueMax, noIndex, counts, serverTime: Date.now() });
   });
@@ -162,7 +166,7 @@ export function createApp({ db, origins = ORIGINS }) {
       if (err.code === 'VERSION_CONFLICT') return sendError(req, res, 409, 'VERSION_CONFLICT', 'Пока шли раздумья, данные изменились', { extra: { current: err.current } });
       if (err.code === 'NOT_FOUND') return sendError(req, res, 404, 'NOT_FOUND', 'Вакансия закрыта, но объявление провисит ещё год');
     }
-    log('err', req.id, err.stack ?? err);
+    event('err', `${req.id} ${err.stack ?? err}`, { requestId: req.id, msg: String(err.stack ?? err) });
     sendError(req, res, 500, 'INTERNAL', 'HR ушёл на обед');
   });
 

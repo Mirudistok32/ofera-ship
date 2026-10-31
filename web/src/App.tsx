@@ -8,6 +8,7 @@ import { Ticker } from './components/Ticker';
 import { RequireAuth } from './components/RequireAuth';
 import { ToastProvider } from './components/Toasts';
 import { ChaosPanel } from './devtools/ChaosPanel';
+import { CHAOS_PANEL } from './config';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { NotFound } from './pages/NotFound';
@@ -62,7 +63,7 @@ export function App() {
         <main className="main">
           <Suspense fallback={<p className="center muted small">Загружаем…</p>}><Page /></Suspense>
         </main>
-        <ChaosPanel />
+        {CHAOS_PANEL && <ChaosPanel />}
       </ToastProvider>
     </MeProvider>
   );
