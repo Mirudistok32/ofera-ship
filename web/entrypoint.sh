@@ -8,6 +8,16 @@ case "$API_URL" in
     exit 1
     ;;
 esac
+# Значение попадает в заголовок ответа и в настройки nginx
+OFERA_RELEASE="${OFERA_RELEASE:-dev}"
+case "$OFERA_RELEASE" in
+  *[!A-Za-z0-9._-]*)
+    echo "OFERA_RELEASE содержит недопустимые символы: $OFERA_RELEASE" >&2
+    exit 1
+    ;;
+esac
+printf 'set $release "%s";\n' "$OFERA_RELEASE" > /tmp/release.conf
+
 case "$OFERA_STAND" in
   dev|stage|prod) ;;
   *)

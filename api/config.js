@@ -53,3 +53,12 @@ export const BOTS = {
 export const CHECK = {
   cacheGapMs: num('QUEST_CACHE_GAP_MS', 5000),
 };
+
+export const RELEASE = process.env.OFERA_RELEASE || 'dev';
+export const SLOT = process.env.OFERA_SLOT || null;
+
+/* Новая версия при выкатке: процесс поднят, база ещё у старой. Пока ждёт, запросы придерживает, а не роняет */
+export const STANDBY = process.env.QUEST_STANDBY === '1';
+export const HOLD_MS = 30_000;
+/* Сколько старая версия ждёт начатые запросы. Меньше 10 с, после которых docker stop убивает процесс */
+export const DRAIN_MS = 8_000;

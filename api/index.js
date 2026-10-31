@@ -4,9 +4,14 @@
    npm run quest:server · npm run quest:reset · npm run quest:selftest
    ========================================================= */
 import express from 'express';
+import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PORT, DB_FILE, ORIGINS } from './config.js';
+import { PORT, DB_FILE, ORIGINS, RELEASE, SLOT, STANDBY, HOLD_MS, DRAIN_MS } from './config.js';
 import { Db, DbError, newCtx, dbHeaders } from './db.js';
 import { seed } from './seed.js';
 import { log, requestLog } from './log.js';
@@ -136,6 +141,9 @@ export function createApp({ db, origins = ORIGINS }) {
     res.json({ ok: true, serverTime: Date.now(), boots: db.meta.boots, seed: db.meta.seed, counts });
   });
 
+  /* Какая версия ответила: агент сверяет её до и после переключения */
+  app.get('/version', (req, res) => res.json(versionInfo()));
+
   /* Состояние пула для пульта */
   app.get('/__db', (req, res) => {
     const { active, queued, poolSize, queueMax, noIndex, counts } = db.stats();
@@ -161,20 +169,91 @@ export function createApp({ db, origins = ORIGINS }) {
   return app;
 }
 
-export function start({ port = PORT, file = DB_FILE } = {}) {
-  const db = Db.open(file, seed);
-  db.setMeta({ boots: (db.meta.boots ?? 0) + 1, bootedAt: new Date().toISOString() });
-  db.flush();
-  const app = createApp({ db });
-  const server = app.listen(port, () => {
-    log('http', `«Офферомания» на http://localhost:${port} · запуск №${db.meta.boots} · ${db.tables.offers.size} офферов`);
-    log('cors', `разрешены: ${ORIGINS.join(', ')}`);
+const versionInfo = () => ({ release: RELEASE, slot: SLOT, stand: process.env.OFERA_STAND ?? null });
+
+/* База живёт в памяти процесса, поэтому писатель должен быть один. Запасной слот не может проверить себя на настоящем файле,
+   поэтому проверяет на копии в отдельном процессе: тот откроет базу, соберёт приложение и выйдет вместе со всеми таймерами */
+function rehearse(file) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ofera-rehearsal-'));
+  if (fs.existsSync(file)) fs.copyFileSync(file, path.join(dir, path.basename(file)));
+  const run = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], {
+    encoding: 'utf8',
+    env: { ...process.env, QUEST_STANDBY: '0', QUEST_DRY_RUN: '1', QUEST_DATA: dir },
   });
-  const stop = () => {
-    db.flush();
-    server.close();
-    server.closeAllConnections();
+  fs.rmSync(dir, { recursive: true, force: true });
+  if (run.status !== 0) {
+    log('err', `репетиция запуска не прошла: ${run.stderr.trim()}`);
+    process.exit(1);
+  }
+}
+
+export function start({ port = PORT, file = DB_FILE } = {}) {
+  if (process.env.QUEST_DRY_RUN) {
+    createApp({ db: Db.open(file, seed) });
     process.exit(0);
+  }
+  let db;
+  let app;
+  let holdTimer;
+  let stopping = false;
+  let busy = 0;   // поток SSE сюда не входит: он открыт всегда, а браузер переподключится сам
+  const held = [];
+
+  const serve = (req, res) => {
+    if (!req.url.startsWith('/stream')) {
+      busy++;
+      res.once('close', () => { busy--; });
+    }
+    app(req, res);
+  };
+
+  const boot = () => {
+    if (app) return;
+    clearTimeout(holdTimer);
+    db = Db.open(file, seed);
+    db.setMeta({ boots: (db.meta.boots ?? 0) + 1, bootedAt: new Date().toISOString() });
+    db.flush();
+    app = createApp({ db });
+    log('http', `«Офферомания» на http://localhost:${port} · запуск №${db.meta.boots} · ${db.tables.offers.size} офферов${held.length ? ` · придержано запросов: ${held.length}` : ''}`);
+    log('cors', `разрешены: ${ORIGINS.join(', ')}`);
+    for (const [req, res] of held.splice(0)) serve(req, res);
+  };
+
+  const server = http.createServer((req, res) => {
+    if (app) return serve(req, res);
+    const url = req.url.split('?')[0];
+    if (url === '/health' || url === '/ready' || url === '/version') {
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify(url === '/version' ? versionInfo() : { ok: true, standby: true }));
+    }
+    held.push([req, res]);
+    /* Агент пропал между переключением и передачей базы: без этого запросы ждали бы вечно */
+    holdTimer ??= setTimeout(boot, HOLD_MS);
+  });
+
+  if (STANDBY) {
+    rehearse(file);
+    process.on('SIGUSR2', boot);   // прежняя версия дописала файл и вышла, база теперь наша
+  } else {
+    boot();
+  }
+  server.listen(port);
+
+  /* Новые подключения больше не принимаем, начатые запросы дорабатывают. Файл пишем последним: после него писать уже некому */
+  const stop = () => {
+    if (!app) process.exit(0);
+    if (stopping) return;
+    stopping = true;
+    server.close();
+    server.closeIdleConnections();
+    const deadline = Date.now() + DRAIN_MS;
+    const wait = () => {
+      if (busy > 0 && Date.now() < deadline) return setTimeout(wait, 50);
+      db.flush();
+      server.closeAllConnections();
+      process.exit(0);
+    };
+    wait();
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
