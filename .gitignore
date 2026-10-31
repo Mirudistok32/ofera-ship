@@ -4,3 +4,5 @@ node_modules/
 dist/
 secrets/
 deploy/dev.env
+.env.*
+!.env.example
