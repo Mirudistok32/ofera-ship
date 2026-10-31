@@ -8,5 +8,13 @@ case "$API_URL" in
     exit 1
     ;;
 esac
+case "$OFERA_STAND" in
+  dev|stage|prod) ;;
+  *)
+    echo "Неизвестный стенд: $OFERA_STAND" >&2
+    exit 1
+    ;;
+esac
+
 printf 'window.__CONFIG__ = { apiUrl: "%s", stand: "%s" };\n' "$API_URL" "$OFERA_STAND" > /usr/share/nginx/html/config.js
 exec "$@"
