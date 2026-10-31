@@ -8,12 +8,30 @@
    - Вход: 5 неудачных попыток в минуту на пару IP + логин, шестая → 429 с Retry-After, даже с верным паролем.
    - Секрет подписи — в db.meta: перезапуск не разлогинивает, quest:reset разлогинивает всех. */
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { promisify } from 'node:util';
 import express from 'express';
 import { ACCESS_TTL, REFRESH_TTL, LOGIN_LIMIT } from './config.js';
 import { DbError } from './db.js';
 import { HttpError } from './errors.js';
 import { log } from './log.js';
+
+export function loadJwtSecret(db, { file = process.env.QUEST_JWT_FILE || '/run/secrets/jwt', env = process.env.NODE_ENV } = {}) {
+  let key = '';
+  try {
+    key = fs.readFileSync(file, 'utf8').trim();
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw new Error(`Ключ JWT ${file} не читается: ${err.code}`);
+  }
+  if (key) {
+    if (key.length < 32) throw new Error(`Ключ JWT ${file} короче 32 символов: npm run secrets:rotate`);
+    if (db.meta.jwtSecret) db.setMeta({ jwtSecret: undefined });
+    return key;
+  }
+  if (env === 'production') throw new Error(`Нет ключа JWT ${file}: npm run secrets:init и секрет jwt в compose`);
+  if (!db.meta.jwtSecret) db.setMeta({ jwtSecret: crypto.randomBytes(32).toString('base64url') });
+  return db.meta.jwtSecret;
+}
 
 export const COOKIE = 'quest_refresh';
 const REALM = 'offeromania';
@@ -109,8 +127,8 @@ const refreshFail = (code) => new HttpError(401, code, REFRESH_FAIL[code], { hea
 
 export function createAuth({ db, origins }) {
   const settings = { accessTtl: ACCESS_TTL, refreshTtl: REFRESH_TTL };
-  if (!db.meta.jwtSecret) db.setMeta({ jwtSecret: crypto.randomBytes(32).toString('base64url') });
-  const secret = () => db.meta.jwtSecret;
+  const jwtKey = loadJwtSecret(db);
+  const secret = () => jwtKey;
   const failures = new Map();   // `${ip}|${login}` → времена неудачных попыток за окно
 
   /* gen — поколение пропусков: кнопка пульта «сделать токен просроченным» поднимает его, и все выданные раньше считаются expired */
