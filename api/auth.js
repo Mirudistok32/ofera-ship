@@ -76,7 +76,8 @@ export function planOf(user, at = Date.now()) {
 /* trophies — ачивки на счету: заработанные минус потраченные на премиум */
 export function publicUser(user) {
   const { passwordHash, salt, ...rest } = user;
-  return { ...rest, plan: planOf(user), trophies: user.achievements.length - (user.achievementsSpent ?? 0) };
+  /* Expand: у старых строк поля нет, и пока обе версии живы, оно необязательно. Подробнее — docs/expand-contract.md */
+  return { ...rest, displayName: user.displayName ?? user.login, plan: planOf(user), trophies: user.achievements.length - (user.achievementsSpent ?? 0) };
 }
 
 /* Премиальное действие: тариф в токене и в базе должны совпасть. Не совпали — 403 PLAN_STALE, лечится refresh:
@@ -336,6 +337,13 @@ export function createAuth({ db, origins }) {
     if (!user) throw unauthorized('invalid', 'TOKEN_INVALID', 'Такого сотрудника нет');
     const { role, plan, exp } = req.auth;
     res.json({ user: publicUser(user), token: { role, plan, exp }, serverTime: Date.now() });
+  });
+
+  router.put('/me/display-name', requireAuth, async (req, res) => {
+    const name = String(req.body?.displayName ?? '').trim();
+    if (name.length < 2 || name.length > 40) throw new HttpError(422, 'VALIDATION', 'Имя заполнено с ошибками', { fields: { displayName: 'От 2 до 40 символов' } });
+    const user = await db.tx(req.db, (t) => t.update('users', req.auth.sub, { displayName: name }));
+    res.json({ user: publicUser(user), serverTime: Date.now() });
   });
 
   return { router, authenticate, requireAuth, optionalAuth, requireRole, settings, bearer, expireAll, inspect };
