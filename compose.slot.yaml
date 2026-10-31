@@ -1,0 +1,26 @@
+# Слот blue-green поверх compose.yaml и deploy/compose.stand.yaml: агент поднимает новую версию рядом с работающей.
+# Запускает агент: compose -p ofera-<стенд>-<слот> -f compose.yaml -f deploy/compose.stand.yaml -f compose.slot.yaml.
+# Файл не лежит в deploy/ нарочно: S16 копирует этот каталог целиком, а без этого файла агент работает по-старому
+services:
+  api:
+    environment:
+      OFERA_RELEASE: ${IMAGE_TAG}
+      OFERA_SLOT: ${OFERA_SLOT:?нужен слот}
+      # 1 — база ещё у работающей версии: запросы придерживаем до сигнала SIGUSR2
+      QUEST_STANDBY: ${QUEST_STANDBY:-0}
+
+  web:
+    environment:
+      OFERA_RELEASE: ${IMAGE_TAG}
+    networks:
+      edge:
+        # Вместо общего имени стенда: иначе DNS отдавал бы edge оба слота сразу
+        aliases: !override
+          - ofera-${OFERA_STAND}-${OFERA_SLOT}-web
+
+# Том один на оба слота и называется как раньше: база переживает переход на blue-green
+volumes:
+  data:
+    name: ofera-${OFERA_STAND}_data
+    external: true
+    labels: !reset {}
