@@ -9,6 +9,8 @@ export default defineConfig({
   plugins: [react()],
   /* Адрес CDN для ассетов задаётся при сборке. Без него — тот же origin */
   base: process.env.ASSET_BASE || '/',
+  /* Карты собираются для разбора ошибок, но ссылки на них в бандле нет: в образ они не попадают (web/Dockerfile) */
+  build: { sourcemap: 'hidden' },
   experimental: {
     /* config.js и stand.js у каждого стенда свои, поэтому остаются на адресе страницы, а не на CDN */
     renderBuiltUrl: (file, { type }) => (type === 'public' ? `/${file}` : undefined),

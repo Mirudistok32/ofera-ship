@@ -6,3 +6,4 @@ secrets/
 deploy/dev.env
 .env.*
 !.env.example
+maps/

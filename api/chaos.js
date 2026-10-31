@@ -47,7 +47,7 @@ const FLAKY_GET = ['drop', 500, 429];
 const JUMP = 1.1;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const quiet = (req) => req.method === 'OPTIONS' || /^\/(__|health$|auth\/|stream$)/.test(req.path);
+const quiet = (req) => req.method === 'OPTIONS' || /^\/(__|health$|ready$|auth\/|stream$)/.test(req.path);
 
 export function createChaos({ db, auth, origins }) {
   const settings = { ...CALM };

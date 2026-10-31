@@ -32,12 +32,24 @@ const login = (password) => fetch(`${base}/auth/login`, {
   body: JSON.stringify({ login: 'junior', password }),
 });
 
-test('/health отвечает', async () => {
-  for (const url of ['/health']) {
+test('/health и /ready отвечают', async () => {
+  for (const url of ['/health', '/ready']) {
     const res = await fetch(`${base}${url}`);
     assert.equal(res.status, 200);
     assert.equal((await res.json()).ok, true);
   }
+});
+
+test('база не отвечает: /ready — 503, /health — 200', async () => {
+  const { run } = app.db;
+  app.db.run = () => Promise.reject(new Error('база упала'));
+  try {
+    assert.equal((await fetch(`${base}/ready`)).status, 503);
+    assert.equal((await fetch(`${base}/health`)).status, 200);
+  } finally {
+    app.db.run = run;
+  }
+  assert.equal((await fetch(`${base}/ready`)).status, 200);
 });
 
 test('верный пароль даёт токен и cookie, недоступную скриптам', async () => {

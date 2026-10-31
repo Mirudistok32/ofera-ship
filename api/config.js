@@ -62,3 +62,9 @@ export const STANDBY = process.env.QUEST_STANDBY === '1';
 export const HOLD_MS = 30_000;
 /* Сколько старая версия ждёт начатые запросы. Меньше 10 с, после которых docker stop убивает процесс */
 export const DRAIN_MS = 8_000;
+
+/* Пульт сбоев и проверки, которые его крутят, открыты только на ноутбуке и на стенде dev. Образ без имени стенда их не откроет */
+export const CHAOS_OPEN = process.env.NODE_ENV !== 'production' || process.env.OFERA_STAND === 'dev';
+
+/* Сколько прокси стоит перед сервером: req.ip берётся из X-Forwarded-For на столько шагов назад */
+export const TRUST_PROXY = Number(process.env.QUEST_TRUST_PROXY) || 0;
