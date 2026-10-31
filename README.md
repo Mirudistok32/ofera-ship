@@ -1,5 +1,7 @@
 # Офферомания
 
+[![CI](https://github.com/Mirudistok32/ofera-ship/actions/workflows/ci.yml/badge.svg)](https://github.com/Mirudistok32/ofera-ship/actions/workflows/ci.yml)
+
 Приложение из практики «От коммита до прода»: `web/` — React и TypeScript, `api/` — Express. Живёт пока только на ноутбуке. Тикеты, которые это исправят, — на странице `ship.html` сайта.
 
 ## Запуск
