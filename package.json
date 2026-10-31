@@ -15,6 +15,8 @@
     "reset": "npm run reset --prefix api",
     "test": "npm test --prefix api",
     "secrets:init": "node scripts/secrets.mjs init",
-    "secrets:rotate": "node scripts/secrets.mjs rotate"
+    "secrets:rotate": "node scripts/secrets.mjs rotate",
+    "secrets:scan": "node scripts/secrets.mjs scan",
+    "secrets:hook": "git config core.hooksPath .githooks"
   }
 }
