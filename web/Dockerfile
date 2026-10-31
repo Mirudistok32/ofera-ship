@@ -1,9 +1,10 @@
 FROM --platform=$BUILDPLATFORM node:26.13.0-slim AS build
+ARG ASSET_BASE=/
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN ASSET_BASE="$ASSET_BASE" npm run build
 
 FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
