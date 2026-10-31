@@ -13,6 +13,8 @@
     "build": "npm run build --prefix web",
     "typecheck": "npm run typecheck --prefix web",
     "reset": "npm run reset --prefix api",
-    "test": "npm test --prefix api"
+    "test": "npm test --prefix api",
+    "secrets:init": "node scripts/secrets.mjs init",
+    "secrets:rotate": "node scripts/secrets.mjs rotate"
   }
 }
