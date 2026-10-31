@@ -21,3 +21,4 @@ npm run dev   # api http://localhost:4010 и web http://localhost:5191
 | `npm run reset` | чистая база (сервер остановить) |
 
 Node 22.9 или новее. База — файл `.data/db.json` в корне проекта.
+
