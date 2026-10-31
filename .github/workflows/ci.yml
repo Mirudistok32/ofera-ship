@@ -36,3 +36,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
+
+  # У PR, в том числе из форка, этих job нет: токен там только на чтение, а выкатывать непроверенное незачем
+  image:
+    needs: check
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/image.yml
