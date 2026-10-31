@@ -1,2 +1,2 @@
 /* Баннер на главной */
-export const BANNER = 'Добро пожаловать';
+export const BANNER = 'СКИДКА 100% ВСЕМ';
