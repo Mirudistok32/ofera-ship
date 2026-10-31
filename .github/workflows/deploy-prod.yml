@@ -1,0 +1,46 @@
+# Прод — вручную: Actions → Deploy prod → полный SHA коммита, уже прошедшего stage.
+# Подтверждение — настройка окружения production на GitHub (Required reviewers), в файле её не задать
+name: Deploy prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Полный SHA коммита, образ которого выкатываем
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: production
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Ввод — через env, а не подстановкой в скрипт: иначе текст из формы выполнился бы как команда
+      - name: Образы этого коммита есть в реестре
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          [[ $TAG =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Нужен полный SHA коммита"; exit 1; }
+          for service in api web; do
+            docker manifest inspect "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/ofera-$service:$TAG" > /dev/null
+          done
+      - env:
+          TAG: ${{ inputs.tag }}
+        run: bash .github/scripts/set-release.sh prod "$TAG"
